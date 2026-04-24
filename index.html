@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wilson–Cowan Diffusion Simulator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d1117;
+    color: #e2e8f0;
+    font-family: 'Courier New', monospace;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 15px;
+    font-weight: 500;
+    color: #94a3b8;
+    margin-bottom: 4px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .subtitle {
+    font-size: 11px;
+    color: #4b5563;
+    margin-bottom: 18px;
+  }
+  .stats-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    background: #161b22;
+    border: 0.5px solid #21262d;
+    border-radius: 6px;
+    padding: 6px 14px;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .stat-label { font-size: 10px; color: #4b5563; text-transform: uppercase; letter-spacing: 0.08em; }
+  .stat-val { font-size: 12px; font-weight: 500; }
+  .canvases {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .heatwrap {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+  }
+  #heat {
+    display: block;
+    width: 100%;
+    border-radius: 6px;
+    image-rendering: pixelated;
+  }
+  .ax-label {
+    position: absolute;
+    font-size: 9px;
+    color: #374151;
+    pointer-events: none;
+  }
+  #prof {
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px 24px;
+    margin-bottom: 14px;
+  }
+  .ctrl-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #6b7280;
+    margin-bottom: 4px;
+  }
+  .ctrl-val { font-weight: 500; }
+  input[type=range] {
+    width: 100%;
+    accent-color: #38bdf8;
+    cursor: pointer;
+  }
+  .buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .preset-label {
+    font-size: 10px;
+    color: #4b5563;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-right: 4px;
+  }
+  button {
+    background: transparent;
+    border: 0.5px solid #21262d;
+    color: #94a3b8;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  button:hover { background: #161b22; color: #e2e8f0; }
+  button:active { transform: scale(0.97); }
+  .legend {
+    margin-top: 20px;
+    border-top: 0.5px solid #21262d;
+    padding-top: 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 32px;
+    font-size: 11px;
+    color: #6b7280;
+  }
+  .legend h3 { font-size: 10px; color: #4b5563; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .legend p { line-height: 1.6; }
+  .cmap-bar {
+    height: 8px;
+    border-radius: 3px;
+    background: linear-gradient(to right, #35295e, #1d6e7e, #5bbf9e, #c8c835, #e63030);
+    margin-bottom: 4px;
+  }
+  .cmap-labels { display: flex; justify-content: space-between; font-size: 10px; color: #4b5563; }
+  .regime-list { list-style: none; }
+  .regime-list li { margin-bottom: 4px; display: flex; gap: 8px; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  @media (max-width: 600px) {
+    .controls { grid-template-columns: 1fr 1fr; }
+    .legend { grid-template-columns: 1fr; }
+    #prof { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Wilson–Cowan diffusion simulator</h1>
+<p class="subtitle">Snyder & Weber — 1D excitatory field with spatial diffusion · E only diffuses</p>
+
+<div class="stats-row">
+  <div class="stat"><span class="stat-label">regime</span><span class="stat-val" id="regime" style="color:#38bdf8;">—</span></div>
+  <div class="stat"><span class="stat-label">sync index</span><span class="stat-val" id="syncv" style="color:#a78bfa;">—</span></div>
+  <div class="stat"><span class="stat-label">⟨E⟩</span><span class="stat-val" id="meanE" style="color:#34d399;">—</span></div>
+  <div class="stat"><span class="stat-label">t (ms)</span><span class="stat-val" id="tv" style="color:#fbbf24;">—</span></div>
+</div>
+
+<div class="canvases">
+  <div class="heatwrap">
+    <canvas id="heat"></canvas>
+    <span class="ax-label" style="bottom:8px; left:10px;">x (space →)</span>
+    <span class="ax-label" style="top:8px; left:8px; writing-mode:vertical-rl;">t ↓ (time)</span>
+    <span class="ax-label" style="top:8px; right:10px;">E activity</span>
+  </div>
+  <canvas id="prof" width="180" height="300"></canvas>
+</div>
+
+<div class="controls">
+  <div>
+    <div class="ctrl-label"><span>D — diffusion coefficient</span><span class="ctrl-val" id="dv" style="color:#38bdf8;">0.30</span></div>
+    <input type="range" id="ds" min="0" max="2" step="0.01" value="0.3">
+  </div>
+  <div>
+    <div class="ctrl-label"><span>P — external drive</span><span class="ctrl-val" id="pv" style="color:#34d399;">2.80</span></div>
+    <input type="range" id="ps" min="0.5" max="5" step="0.05" value="2.8">
+  </div>
+  <div>
+    <div class="ctrl-label"><span>σ — noise amplitude</span><span class="ctrl-val" id="nv" style="color:#a78bfa;">0.050</span></div>
+    <input type="range" id="ns" min="0" max="0.5" step="0.005" value="0.05">
+  </div>
+</div>
+
+<div class="buttons">
+  <span class="preset-label">presets</span>
+  <button onclick="preset(0.01, 2.8, 0.05)">Hopf sync</button>
+  <button onclick="preset(1.5, 3.5, 0.05)">Turing patterns</button>
+  <button onclick="preset(0.01, 2.2, 0.03)">Near bifurcation</button>
+  <button onclick="preset(0.01, 1.0, 0.0)">Quiescent</button>
+  <button onclick="reset()" style="margin-left:10px;">Reset ICs</button>
+  <button onclick="togglePause()" id="pb">Pause</button>
+</div>
+
+<div class="legend">
+  <div>
+    <h3>colormap (turbo) — E activity</h3>
+    <div class="cmap-bar"></div>
+    <div class="cmap-labels"><span>0 (silent)</span><span>0.5</span><span>1 (saturated)</span></div>
+    <p style="margin-top:8px;">Horizontal axis: space (N=128 nodes, periodic BCs).<br>
+    Vertical axis: time scrolling downward.<br>
+    Blue profile = E(x), pink = I(x) at current t.</p>
+  </div>
+  <div>
+    <h3>regime classification</h3>
+    <ul class="regime-list">
+      <li><span class="dot" style="background:#38bdf8;"></span><span><b style="color:#e2e8f0;">Synchrony</b> — low spatial variance, uniform oscillation (Hopf). Epilepsy-relevant.</span></li>
+      <li><span class="dot" style="background:#fb7185;"></span><span><b style="color:#e2e8f0;">Spatial patterns</b> — high variance, Turing instability. Large D competes with Hopf.</span></li>
+      <li><span class="dot" style="background:#fbbf24;"></span><span><b style="color:#e2e8f0;">Mixed / transient</b> — intermediate D, pattern-synchrony competition.</span></li>
+      <li><span class="dot" style="background:#6b7280;"></span><span><b style="color:#e2e8f0;">Quiescent</b> — below Hopf bifurcation (P ≲ 2.2 at b_IE = 19 mV·ms).</span></li>
+    </ul>
+    <p style="margin-top:8px;">Parameters: τ_E=26ms, τ_I=32ms, w_EE=10, w_EI=8, w_IE=10, w_II=3.<br>
+    Hopf bifurcation ≈ P=2.2. Steyn-Ross et al. (2013).</p>
+  </div>
+</div>
+
+<script>
+const N = 128, dx = 1.0, dt = 0.1;
+const tauE = 26, tauI = 32;
+const wEE = 10, wEI = 8, wIE = 10, wII = 3;
+const thE = 2.5, thI = 3.5, aE = 1.5, aI = 1.5;
+let D = 0.3, P = 2.8, noise = 0.05, paused = false, simT = 0;
+let E = new Float32Array(N), I = new Float32Array(N);
+const ROWS = 400;
+const hbuf = new Float32Array(ROWS * N);
+let hhead = 0;
+
+function sig(x, a, th) {
+  return 1 / (1 + Math.exp(Math.max(-50, Math.min(50, -a * (x - th)))));
+}
+
+let spare = null;
+function rn() {
+  if (spare !== null) { const v = spare; spare = null; return v; }
+  const u = Math.random() + 1e-12, v2 = Math.random();
+  const s = Math.sqrt(-2 * Math.log(u));
+  spare = s * Math.sin(2 * Math.PI * v2);
+  return s * Math.cos(2 * Math.PI * v2);
+}
+
+function reset() {
+  for (let i = 0; i < N; i++) {
+    E[i] = 0.1 + 0.1 * Math.random();
+    I[i] = 0.1 + 0.1 * Math.random();
+  }
+  hbuf.fill(0); hhead = 0; simT = 0;
+}
+
+function preset(d, p, n) {
+  D = d; P = p; noise = n;
+  document.getElementById('ds').value = d;
+  document.getElementById('ps').value = p;
+  document.getElementById('ns').value = n;
+  document.getElementById('dv').textContent = d.toFixed(2);
+  document.getElementById('pv').textContent = p.toFixed(2);
+  document.getElementById('nv').textContent = n.toFixed(3);
+  reset();
+}
+
+function togglePause() {
+  paused = !paused;
+  document.getElementById('pb').textContent = paused ? 'Resume' : 'Pause';
+}
+
+function step() {
+  const nE = new Float32Array(N), nI = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const l = E[(i - 1 + N) % N], r = E[(i + 1) % N];
+    const lap = (l - 2 * E[i] + r) / (dx * dx);
+    const inpE = wEE * E[i] - wEI * I[i] + P + noise * rn();
+    const inpI = wIE * E[i] - wII * I[i] + noise * rn();
+    const dE = (-E[i] + sig(inpE, aE, thE)) / tauE + D * lap;
+    const dI = (-I[i] + sig(inpI, aI, thI)) / tauI;
+    nE[i] = Math.max(0, Math.min(1, E[i] + dt * dE));
+    nI[i] = Math.max(0, Math.min(1, I[i] + dt * dI));
+  }
+  E = nE; I = nI; simT += dt;
+}
+
+function pushRow() {
+  const off = hhead * N;
+  for (let i = 0; i < N; i++) hbuf[off + i] = E[i];
+  hhead = (hhead + 1) % ROWS;
+}
+
+function turboColor(v) {
+  v = Math.max(0, Math.min(1, v));
+  let r, g, b;
+  if (v < 0.25) { const t = v/0.25; r=53+37*t|0; g=42+130*t|0; b=135-10*t|0; }
+  else if (v < 0.5) { const t=(v-0.25)/0.25; r=90+90*t|0; g=172+28*t|0; b=125-95*t|0; }
+  else if (v < 0.75) { const t=(v-0.5)/0.25; r=180+45*t|0; g=200-80*t|0; b=30-20*t|0; }
+  else { const t=(v-0.75)/0.25; r=225+20*t|0; g=120-80*t|0; b=10-5*t|0; }
+  return [r, g, b];
+}
+
+const heatEl = document.getElementById('heat');
+const profEl = document.getElementById('prof');
+const hctx = heatEl.getContext('2d');
+const pctx = profEl.getContext('2d');
+
+function sizeHeat() {
+  const w = heatEl.parentElement.clientWidth;
+  if (heatEl.width !== w) { heatEl.width = w; heatEl.height = 300; }
+}
+
+function drawHeat() {
+  const W = heatEl.width, H = heatEl.height;
+  const img = hctx.createImageData(W, H);
+  const d = img.data;
+  for (let row = 0; row < H; row++) {
+    const hist = (hhead - H + row + ROWS * 10000) % ROWS;
+    const off = hist * N;
+    for (let col = 0; col < W; col++) {
+      const si = Math.floor(col / W * N);
+      const [r, g, b] = turboColor(hbuf[off + si]);
+      const pi = (row * W + col) * 4;
+      d[pi]=r; d[pi+1]=g; d[pi+2]=b; d[pi+3]=255;
+    }
+  }
+  hctx.putImageData(img, 0, 0);
+}
+
+function drawProf() {
+  const W = profEl.width, H = profEl.height;
+  pctx.fillStyle = '#0d1117'; pctx.fillRect(0, 0, W, H);
+  pctx.strokeStyle = '#161b22'; pctx.lineWidth = 0.5;
+  for (const v of [0.25, 0.5, 0.75]) {
+    const y = H - v * H;
+    pctx.beginPath(); pctx.moveTo(0, y); pctx.lineTo(W, y); pctx.stroke();
+  }
+  const draw = (arr, color) => {
+    pctx.strokeStyle = color; pctx.lineWidth = 1.5;
+    pctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = i / (N-1) * W, y = H - arr[i] * H;
+      i === 0 ? pctx.moveTo(x, y) : pctx.lineTo(x, y);
+    }
+    pctx.stroke();
+  };
+  draw(E, '#38bdf8'); draw(I, '#f472b6');
+  pctx.font = '10px monospace';
+  pctx.fillStyle = '#38bdf8'; pctx.fillText('E', 6, 26);
+  pctx.fillStyle = '#f472b6'; pctx.fillText('I', 20, 26);
+  pctx.fillStyle = '#374151'; pctx.fillText('1.0', 4, 18);
+  pctx.fillStyle = '#374151'; pctx.fillText('0.0', 4, H - 4);
+}
+
+function computeStats() {
+  let sum = 0;
+  for (let i = 0; i < N; i++) sum += E[i];
+  const mn = sum / N;
+  let v = 0;
+  for (let i = 0; i < N; i++) v += (E[i] - mn) ** 2;
+  v /= N;
+  return { mn, v };
+}
+
+function classifyRegime(mn, v) {
+  if (mn < 0.04) return ['quiescent', '#6b7280'];
+  if (v < 0.0008) return ['synchrony (Hopf)', '#38bdf8'];
+  if (v > 0.018) return ['spatial patterns (Turing)', '#fb7185'];
+  return ['mixed / transient', '#fbbf24'];
+}
+
+let frame = 0;
+function loop() {
+  if (!paused) {
+    for (let s = 0; s < 15; s++) {
+      step();
+      if (s % 3 === 0) pushRow();
+    }
+    sizeHeat(); drawHeat(); drawProf();
+    if (frame % 4 === 0) {
+      const { mn, v } = computeStats();
+      const [label, col] = classifyRegime(mn, v);
+      const regEl = document.getElementById('regime');
+      regEl.textContent = label; regEl.style.color = col;
+      document.getElementById('syncv').textContent = (1 - Math.min(1, v * 60)).toFixed(3);
+      document.getElementById('meanE').textContent = mn.toFixed(3);
+      document.getElementById('tv').textContent = simT.toFixed(0);
+    }
+    frame++;
+  }
+  requestAnimationFrame(loop);
+}
+
+function bind(id, valId, setter, fmt) {
+  document.getElementById(id).addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    setter(v);
+    document.getElementById(valId).textContent = fmt(v);
+  });
+}
+bind('ds', 'dv', v => { D = v; }, v => v.toFixed(2));
+bind('ps', 'pv', v => { P = v; }, v => v.toFixed(2));
+bind('ns', 'nv', v => { noise = v; }, v => v.toFixed(3));
+
+window.addEventListener('resize', sizeHeat);
+reset();
+loop();
+</script>
+</body>
+</html>
